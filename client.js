@@ -71,8 +71,12 @@ window.__ModuleLoader__.load({
       const loadStatus = React.useCallback(async () => {
         try { setStatus(await jget('/status')) } catch (e) { setStatus({ ok: false, message: String(e.message || e) }) }
       }, [])
-      const loadPosts = React.useCallback(async () => {
-        try { setPosts(await jget('/recent?limit=5')) } catch (e) { setPosts({ ok: false, message: String(e.message || e), posts: [] }) }
+      const loadPosts = React.useCallback(async (force) => {
+        try {
+          setPosts(await jget('/recent?limit=5' + (force ? '&refresh=1' : '')))
+        } catch (e) {
+          setPosts({ ok: false, message: String(e.message || e), posts: [] })
+        }
       }, [])
 
       React.useEffect(() => { loadStatus(); loadPosts() }, [loadStatus, loadPosts])
@@ -85,7 +89,13 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         let alive = true
         jget('/config').then(
-          (r) => { if (alive && r && r.ok) { setLimit(Number(r.dailyLimit) || 0); setImageDir(String(r.imageDir || '')) } },
+          (r) => {
+            if (alive && r && r.ok) {
+              setLimit(Number(r.dailyLimit) || 0)
+              setImageDir(String(r.imageDir || ''))
+              if (r.pickMode === 'auto') setPick('auto')
+            }
+          },
           () => {},
         )
         return () => { alive = false }
@@ -129,8 +139,7 @@ window.__ModuleLoader__.load({
       }, [qr, qrState, loadStatus, loadPosts])
 
       const publish = async () => {
-        const content = text.trim()
-        if (!content) { setMsg('先写点内容'); return }
+        const content = text.trim() // 空着也行：服务端会让大肥鱼自己写一句
         setBusy(true); setMsg('')
         try {
           const autoPick = pick === 'auto'
@@ -139,6 +148,7 @@ window.__ModuleLoader__.load({
             visibility,
             images: pick && !autoPick ? [pick] : [],
             autoPick,
+            autoFill: !content,
           })
           setMsg(r.message || (r.ok ? '已发表' : '发表失败'))
           if (r.ok) { setText(''); loadPosts() }
@@ -217,21 +227,30 @@ window.__ModuleLoader__.load({
         h('div', { 'data-qz-card': '' },
           h('div', { 'data-qz-title': '' }, '发一条'),
           h('textarea', {
-            'data-qz-textarea': '', placeholder: '写点什么…（发之前会先读最近的说说，避免重复）',
+            'data-qz-textarea': '', placeholder: '写点什么…（不填的话，大肥鱼会按心情自己写一句；发之前会先读最近的说说，避免重复）',
             value: text, onChange: (e) => setText(e.target.value), maxLength: 2000,
           }),
           h('div', { 'data-qz-row': '' },
             h('span', { 'data-qz-note': '' }, '配图'),
             h('select', {
-              'data-qz-select': '', value: pick, onChange: (e) => setPick(e.target.value),
+              'data-qz-select': '', value: pick,
+              style: { width: 240 },
+              onChange: (e) => {
+                const v = e.target.value
+                setPick(v)
+                // 记住选择：下次进来还是这个
+                jpost('/config', { pickMode: v === 'auto' ? 'auto' : 'none' }).catch(() => {})
+              },
               style: { maxWidth: 320 },
             },
               h('option', { value: '' }, '不带图'),
               h('option', { value: 'auto' }, '让大肥鱼按心情挑'),
               stickers.map((s) => h('option', { key: s.path, value: s.path }, s.name))),
-            pick
-              ? h('img', { src: '/api/qzone/thumb?p=' + encodeURIComponent(pick), alt: '', style: { width: 44, height: 44, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(128,128,128,.3)' } })
-              : null),
+            pick === 'auto'
+              ? h('span', { 'data-qz-note': '' }, '（发表时按文案心情自动挑一张）')
+              : pick
+                ? h('img', { src: '/api/qzone/thumb?p=' + encodeURIComponent(pick), alt: '', style: { width: 44, height: 44, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(128,128,128,.3)' } })
+                : null),
           h('div', { 'data-qz-row': '' },
             h('select', { 'data-qz-select': '', value: visibility, onChange: (e) => setVisibility(e.target.value) },
               h('option', { value: 'public' }, '公开'),
@@ -239,13 +258,13 @@ window.__ModuleLoader__.load({
               h('option', { value: 'private' }, '仅自己')),
             h('button', { 'data-qz-btn': '', 'data-primary': '', disabled: busy || !loggedIn, onClick: publish },
               busy ? '发表中…' : '发表'),
-            h('span', { 'data-qz-note': '' }, '每天最多 8 条，两条间隔 ≥60 秒')),
+            h('span', { 'data-qz-note': '' }, '不填内容 ⇒ 大肥鱼自己写一句；每天最多 8 条，两条间隔 ≥60 秒')),
           msg ? h('div', { 'data-qz-msg': '', 'data-warn': msg.indexOf('失败') >= 0 ? '' : undefined }, msg) : null),
 
         h('div', { 'data-qz-card': '' },
           h('div', { 'data-qz-row': '' },
             h('span', { 'data-qz-title': '' }, '最近的说说'),
-            h('button', { 'data-qz-btn': '', onClick: loadPosts }, '刷新')),
+            h('button', { 'data-qz-btn': '', onClick: () => loadPosts(true) }, '刷新')),
           posts && posts.ok
             ? h('div', { 'data-qz-posts': '' },
               (posts.posts || []).length

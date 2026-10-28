@@ -2,8 +2,8 @@ import { readFile, readdir } from 'node:fs/promises'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pluginOptions, publishMood, readRecent, readStatus } from './lib/qzone.js'
-import { clearSession, startQrLogin, pollQrLogin } from './lib/qqlogin.js'
-import { startQrLoginSilent, pollQrLoginSilent, closeSilentBrowser, resetSilentProfile } from './lib/silent.js'
+import { clearSession, startQrLogin, pollQrLogin, loadSession } from './lib/qqlogin.js'
+import { startQrLoginSilent, pollQrLoginSilent, closeSilentBrowser, resetSilentProfile, refreshSessionViaSilent } from './lib/silent.js'
 
 export const name = 'qzone'
 export const inject = ['tools', 'systemPrompt', 'webServer']
@@ -55,7 +55,7 @@ export function apply(ctx, config = {}) {
   if (!(runtime.minIntervalMs >= 1000)) runtime.minIntervalMs = options.minIntervalMs
   const saveRuntime = () => {
     try {
-      writeFileSync(configFile, JSON.stringify({ dailyLimit: runtime.dailyLimit, minIntervalMs: runtime.minIntervalMs, imageDir: runtime.imageDir }))
+      writeFileSync(configFile, JSON.stringify({ dailyLimit: runtime.dailyLimit, minIntervalMs: runtime.minIntervalMs, imageDir: runtime.imageDir, pickMode: runtime.pickMode || 'none' }))
       return true
     } catch {
       return false
@@ -239,7 +239,28 @@ export function apply(ctx, config = {}) {
 
     if (method === 'GET' && path === '/api/qzone/recent') {
       const limit = Number(url.searchParams.get('limit') || 5)
-      const r = await readRecent(options, limit)
+      const force = url.searchParams.get('refresh') === '1'
+      const cacheFile = join(process.env.USERPROFILE || '', '.dsh', 'qzone-recent-cache.json')
+      const readCache = () => {
+        try { return JSON.parse(readFileSync(cacheFile, 'utf8')) } catch { return null }
+      }
+      const cached = readCache()
+      // 10 分钟内直接给缓存（点「刷新」才强制重读）
+      if (!force && cached && Array.isArray(cached.posts) && cached.at && Date.now() - cached.at < 10 * 60 * 1000) {
+        return sendJson(res, 200, {
+          ok: true,
+          uin: cached.uin || '',
+          message: '最近 ' + cached.posts.length + ' 条（缓存，点刷新可重读）',
+          posts: cached.posts.slice(0, limit),
+          cached: true,
+        })
+      }
+      const r = await readRecent(runtime, limit)
+      if (r.ok) {
+        try {
+          writeFileSync(cacheFile, JSON.stringify({ at: Date.now(), uin: r.uin, posts: r.posts, message: r.message }))
+        } catch {}
+      }
       return sendJson(res, 200, r)
     }
 
@@ -251,6 +272,7 @@ export function apply(ctx, config = {}) {
           minIntervalMs: runtime.minIntervalMs,
           hardMax: 999,
           imageDir: runtime.imageDir,
+          pickMode: runtime.pickMode === 'auto' ? 'auto' : 'none',
         })
       }
       if (method === 'POST') {
@@ -264,6 +286,9 @@ export function apply(ctx, config = {}) {
         }
         if (typeof body.imageDir === 'string' && body.imageDir.trim()) {
           runtime.imageDir = body.imageDir.trim()
+        }
+        if (body.pickMode === 'auto' || body.pickMode === 'none') {
+          runtime.pickMode = body.pickMode
         }
         const saved = saveRuntime()
         return sendJson(res, 200, { ok: true, dailyLimit: runtime.dailyLimit, imageDir: runtime.imageDir, saved })
@@ -320,6 +345,19 @@ export function apply(ctx, config = {}) {
     if (method === 'POST' && path === '/api/qzone/publish') {
       const body = await readBody(req)
       let images = Array.isArray(body.images) ? body.images.filter((p) => typeof p === 'string' && p) : []
+      // 不填内容 ⇒ 大肥鱼自己按时间/心情写一句
+      if (!String(body.content || '').trim() && body.autoFill) {
+        const h = new Date().getHours()
+        const pool = h < 10
+          ? ['早上好，大肥鱼来报到了🐟', '起这么早，大肥鱼也要起来了🐟', '新的一天，先冒个泡🐟']
+          : h < 17
+            ? ['吃白饭的大肥鱼路过，今天也要好好干饭🐟', '大肥鱼冒个泡，今天也好好活着～🐟', '午后犯困，大肥鱼来打个卡🐟']
+            : h < 22
+              ? ['今天也是被生活泡着的一天，大肥鱼先来发个说说🐟', '大肥鱼下班了，来空间转转🐟', '忙了一天，大肥鱼来冒个泡🐟']
+              : ['快睡了，大肥鱼先来道个晚安🐟', '夜里的大肥鱼，安静冒个泡🐟', '一天结束，大肥鱼也躺平了🐟']
+        body.content = pool[Math.floor(Math.random() * pool.length)]
+        if (body.autoPick === undefined) body.autoPick = true
+      }
       // 让大肥鱼按心情挑：没指定图时，按文案关键词在表情包目录里挑一张
       if (!images.length && body.autoPick) {
         try {
@@ -368,6 +406,25 @@ export function apply(ctx, config = {}) {
 
     return sendJson(res, 404, { ok: false, message: `unknown ${method} ${path}` })
   }
+
+  // 会话保活：每 20 分钟用静默 Chrome 刷一次空间主页，把 p_skey 续上
+  let keepAliveTimer = null
+  try {
+    keepAliveTimer = setInterval(async () => {
+      try {
+        const saved = await loadSession()
+        if (!saved) return
+        const r = await refreshSessionViaSilent(saved.uin)
+        if (!r.ok) {
+          try { ctx.logger?.warn?.('qzone 保活：' + r.message) } catch {}
+        }
+      } catch (e) {
+        try { ctx.logger?.warn?.('qzone 保活出错：' + String(e?.message || e)) } catch {}
+      }
+    }, 20 * 60 * 1000)
+    keepAliveTimer.unref?.()
+    ctx.effect(() => () => { try { clearInterval(keepAliveTimer) } catch {} }, 'qzone: 会话保活定时器')
+  } catch {}
 
   try {
     ctx.effect(() => ctx.webServer.register({
