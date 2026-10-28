@@ -1,0 +1,9 @@
+- insert:
+    - id: qzone
+      name: dsh-qzone
+      config:
+        uin: "2776757452"
+        lockUin: false
+        dailyLimit: 0
+        minIntervalMs: 60000
+        maxLength: 2000

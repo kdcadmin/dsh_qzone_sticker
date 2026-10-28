@@ -1,0 +1,59 @@
+{
+  "name": "dsh-qzone",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "DeepSeek Harness 插件：静默 Chrome 扫码登录，自动给 QQ 空间发说说，支持配图、每日上限、主动发。",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.0-0"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "qzone",
+    "qq-space",
+    "automation",
+    "sticker",
+    "chrome-devtools"
+  ],
+  "license": "MIT",
+  "author": "月亮硬糖",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kdcadmin/dsh_qzone_sticker.git"
+  },
+  "homepage": "https://github.com/kdcadmin/dsh_qzone_sticker",
+  "bugs": {
+    "url": "https://github.com/kdcadmin/dsh_qzone_sticker/issues"
+  }
+}
