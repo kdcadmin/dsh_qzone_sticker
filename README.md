@@ -2,6 +2,8 @@
 
 > 「大肥鱼会自己发说说了。」
 
+
+![发说说](assets/cover.png)
 给 [DeepSeek Harness](https://github.com/deepseek-ai) 用的 QQ 空间插件：本机静默起一份专属 Chrome（headless，不占屏幕），第一次用手机 QQ 扫码登录；之后不用你开浏览器、不用你点按钮——模型可以自己挑时机发说说，**还能按心情配上表情包图片**，每天几条、两条隔多久、公开还是仅自己都能设。
 
 ## 功能
