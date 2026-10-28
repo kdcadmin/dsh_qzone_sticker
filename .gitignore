@@ -3,3 +3,10 @@ node_modules/
 runtime/
 *.log
 .DS_Store
+# 本地配置 / 登录态 / 记忆，绝不进仓库
+config.json
+qzone-config.json
+qzone-session.json
+*.session.json
+memory/
+*.db
