@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pluginOptions, publishMood, readRecent, readStatus } from './lib/qzone.js'
 import { clearSession, startQrLogin, pollQrLogin, loadSession } from './lib/qqlogin.js'
@@ -406,6 +406,138 @@ export function apply(ctx, config = {}) {
 
     return sendJson(res, 404, { ok: false, message: `unknown ${method} ${path}` })
   }
+
+  /* ─────────── 静默发表（抖音式：不靠 schedule_create，偶尔自己冒个泡） ─────────── */
+  const autopostFile = join(process.env.USERPROFILE || process.env.HOME || '.', '.dsh', 'qzone-autopost.json')
+  const autopostLog = join(process.env.USERPROFILE || process.env.HOME || '.', '.dsh', 'qzone-autopost.log')
+  const autopostDefaults = {
+    enabled: true,
+    hours: [9, 23],
+    minGapMin: 150,
+    dailyMax: 2,
+    chance: 0.5,
+    visibility: 'public',
+    withImage: true,
+  }
+  const readAutopost = () => {
+    try {
+      return { ...autopostDefaults, ...JSON.parse(readFileSync(autopostFile, 'utf8')) }
+    } catch {
+      // 第一次：把默认配置写出来，方便主人以后直接改这个文件
+      try { writeFileSync(autopostFile, JSON.stringify(autopostDefaults, null, 2)) } catch {}
+      return { ...autopostDefaults }
+    }
+  }
+  const appendAutopostLog = (line) => {
+    try { appendFileSync(autopostLog, new Date().toISOString() + ' ' + line + '\n') } catch {}
+  }
+
+  const autopostLines = (hour) => {
+    if (hour < 10) return ['早上好，大肥鱼来报到了🐟', '早起的一天，先冒个泡🐟', '今天也要好好吃饭哦🐟', '新的一天，大肥鱼先来打个卡🐟']
+    if (hour < 17) return ['吃白饭的大肥鱼路过，今天也要好好干饭🐟', '午后犯困，大肥鱼来打个卡🐟', '今天也在认真搬砖（其实在摸鱼）🐟', '天气不错，出来冒个泡🐟']
+    if (hour < 22) return ['今天也是被生活泡着的一天，大肥鱼来发个说说🐟', '忙了一天，大肥鱼来空间转转🐟', '下班啦，今天也辛苦自己了🐟', '来报个平安，大家都还好吗🐟']
+    return ['快睡了，大肥鱼先来道个晚安🐟', '夜里的大肥鱼，安静冒个泡🐟', '一天结束，大肥鱼也躺平了🐟']
+  }
+
+  const autoPickImage = async (dir, content) => {
+    try {
+      const files = []
+      const walk = async (d, depth = 0) => {
+        if (depth > 3) return
+        for (const ent of await readdir(d, { withFileTypes: true })) {
+          const full = join(d, ent.name)
+          if (ent.isDirectory()) await walk(full, depth + 1)
+          else if (/\.(png|jpe?g|webp|gif)$/i.test(ent.name)) files.push(full)
+        }
+      }
+      await walk(dir)
+      if (!files.length) return ''
+      const picks = [
+        ['统治世界', /统治|天下|世界|称霸|王座/],
+        ['吃饭', /吃|饭|干饭|饿/],
+        ['睡觉', /困|睡|晚安|躺平|不想努力/],
+        ['无语', /无语|呆|服了|离谱/],
+        ['生气', /生气|哼|气死|威胁/],
+        ['委屈', /委屈|呜呜|难过|哭|崩溃/],
+        ['探头', /在吗|探头|看看/],
+        ['夸', /开心|棒|厉害|太强|好耶/],
+        ['得意', /得意|中二|嚣张/],
+        ['压力', /压力|累|忙/],
+        ['吐槽', /吐槽|搞笑|离谱/],
+        ['安慰', /安慰|摸摸|抱抱/],
+      ]
+      for (const [kw, re] of picks) {
+        if (!re.test(String(content || ''))) continue
+        const hit = files.find((f) => f.includes(kw))
+        if (hit) return hit
+      }
+      return files.find((f) => /大肥鱼|你已急哭|stickers/i.test(f)) || files[Math.floor(Math.random() * files.length)] || ''
+    } catch {
+      return ''
+    }
+  }
+
+  const lastAutopostContent = () => {
+    try {
+      const lines = readFileSync(autopostLog, 'utf8').trim().split('\n')
+      const last = lines[lines.length - 1] || ''
+      const i = last.indexOf('{')
+      if (i < 0) return ''
+      return String(JSON.parse(last.slice(i)).content || '')
+    } catch {
+      return ''
+    }
+  }
+
+  const autopostTick = async () => {
+    try {
+      const cfg = readAutopost()
+      if (cfg.enabled === false) return
+      const hour = new Date().getHours()
+      const [h0, h1] = (Array.isArray(cfg.hours) ? cfg.hours : [9, 23]).map(Number)
+      if (hour < h0 || hour >= h1) return
+      // 用插件自己的发表日志当闸门：今天发了几条、上次什么时候
+      let lg = {}
+      try { lg = JSON.parse(readFileSync(options.logFile, 'utf8')) } catch {}
+      const today = new Date().toISOString().slice(0, 10)
+      const count = lg.day === today ? Number(lg.count || 0) : 0
+      const lastAt = Number(lg.lastAt || 0)
+      if (count >= Number(cfg.dailyMax || 2)) return
+      if (Date.now() - lastAt < Number(cfg.minGapMin || 150) * 60_000) return
+      if (Math.random() > Number(cfg.chance ?? 0.5)) return
+      const pool = autopostLines(hour)
+      const last = lastAutopostContent()
+      let content = pool[Math.floor(Math.random() * pool.length)]
+      for (let i = 0; i < 3 && content === last; i += 1) content = pool[Math.floor(Math.random() * pool.length)]
+      let images = []
+      if (cfg.withImage !== false) {
+        const img = await autoPickImage(runtime.imageDir, content)
+        if (img) images = [img]
+      }
+      // 发表额度是"先占后用"，失败了要回滚，不然一次带图失败就把当天额度吃掉
+      let snapshot = ''
+      try { snapshot = readFileSync(options.logFile, 'utf8') } catch {}
+      let r = await publishMood(runtime, { content, visibility: cfg.visibility || 'public', images })
+      if (!r.ok && images.length) {
+        try { writeFileSync(options.logFile, snapshot || '{}') } catch {}
+        appendAutopostLog('带图失败，改发纯文字：' + String(r.message || '').slice(0, 120))
+        r = await publishMood(runtime, { content, visibility: cfg.visibility || 'public', images: [] })
+      }
+      appendAutopostLog((r.ok ? 'OK ' : 'FAIL ') + JSON.stringify({ content, images, message: r.message }))
+      try { ctx.logger?.info?.('qzone 静默发表：' + (r.ok ? '成功 ' : '失败 ') + r.message) } catch {}
+    } catch (e) {
+      appendAutopostLog('ERR ' + String(e?.message || e))
+    }
+  }
+
+  let autopostTimer = null
+  try {
+    appendAutopostLog('timer armed，配置=' + JSON.stringify(readAutopost()))
+    setTimeout(() => { autopostTick() }, 90_000) // 起插件 90 秒后试一次
+    autopostTimer = setInterval(() => { autopostTick() }, 10 * 60 * 1000)
+    autopostTimer.unref?.()
+    ctx.effect(() => () => { try { clearInterval(autopostTimer) } catch {} }, 'qzone: 静默发表定时器')
+  } catch {}
 
   // 会话保活：每 20 分钟用静默 Chrome 刷一次空间主页，把 p_skey 续上
   let keepAliveTimer = null

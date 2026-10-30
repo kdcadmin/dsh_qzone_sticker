@@ -11,11 +11,17 @@
   "files": [
     "index.js",
     "client.js",
-    "lib",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "market-entry.yml"
+    "market-entry.yml",
+    "lib/chrome.js",
+    "lib/qqlogin.js",
+    "lib/qzone.js",
+    "lib/session.js",
+    "lib/silent.js",
+    "lib/uipost.js",
+    "lib/upload.js"
   ],
   "engines": {
     "node": ">=22",
