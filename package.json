@@ -1,6 +1,6 @@
 {
   "name": "dsh-qzone",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "type": "module",
   "description": "DeepSeek Harness 插件：静默 Chrome 扫码登录，自动给 QQ 空间发说说，支持配图、每日上限、主动发。",
   "main": "index.js",
