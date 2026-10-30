@@ -21,20 +21,28 @@
 
 ## 安装
 
+源码位置：`E:\虚拟机\Python\QQ空间插件`（本机所有项目都归档在 `E:\虚拟机` 下）
+
+**方式一：接进本地 profile（开发用）**
+
 1. 本机装 Node.js 22+，准备好 Chrome
 2. 把插件接进 profile（以 desktop profile 为例）：
 
 ```json
 // profiles/desktop/package.json
 {
-  "dependencies": { "dsh-qzone": "link:C:/Users/xxx/Desktop/QQ空间插件" },
+  "dependencies": { "dsh-qzone": "link:E:/虚拟机/Python/QQ空间插件" },
   "dsh": { "profile": { "bundles": ["...", "dsh-qzone"] } }
 }
 ```
 
 3. 在 `profiles/desktop/node_modules` 下建同名链接：
-   `cmd /c mklink /J "profiles\desktop\node_modules\dsh-qzone" "C:\Users\xxx\Desktop\QQ空间插件"`
+   `cmd /c mklink /J "profiles\desktop\node_modules\dsh-qzone" "E:\虚拟机\Python\QQ空间插件"`
 4. 重启 DeepSeek Harness，设置里就会出现「发说说」
+
+**方式二：插件市场（即将上架）**
+
+上架后可在「设置 → 插件 → 发现」里搜索「QQ空间 / qzone」一键安装，无需手动建链接。
 
 ## 使用
 
@@ -46,7 +54,7 @@
 | --- | --- |
 | `qzone_status` | 看现在登录的是哪个 QQ |
 | `qzone_recent` | 读最近说说（发之前去重用） |
-| `qzone_publish` | 发一条说说，可带 `images`（最多 9 张） |
+| `qzone_publish` | 发一条说说，可带 `images`（最多 9 张）、`visibility`（public/friends/private）；`dryRun: true` 只检查登录不发表 |
 
 例：
 
