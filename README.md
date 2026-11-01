@@ -27,7 +27,7 @@
 
 ## 安装
 
-源码位置：`<plugin-dir>`（本机所有项目都归档在 `<local-dir>` 下）
+源码位置：本仓库（把仓库 clone 到任意目录即可，下文用 `<插件目录>` 代指）
 
 **方式一：接进本地 profile（开发用）**
 
@@ -37,13 +37,13 @@
 ```json
 // profiles/desktop/package.json
 {
-  "dependencies": { "dsh-qzone": "link:<plugin-dir>" },
+  "dependencies": { "dsh-qzone": "link:<插件目录>" },
   "dsh": { "profile": { "bundles": ["...", "dsh-qzone"] } }
 }
 ```
 
 3. 在 `profiles/desktop/node_modules` 下建同名链接：
-   `cmd /c mklink /J "profiles\desktop\node_modules\dsh-qzone" "<plugin-dir>"`
+   `cmd /c mklink /J "profiles\desktop\node_modules\dsh-qzone" "<插件目录>"`
 4. 重启 DeepSeek Harness，设置里就会出现「发说说」
 
 **方式二：插件市场（即将上架）**

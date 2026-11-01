@@ -25,18 +25,18 @@ test('gtk stays in 31 bits and is stable', () => {
 
 test('session accepts only the configured QQ and hides the cookie', () => {
   const session = sessionFromCookies([
-    { name: 'p_uin', value: 'o', domain: '.qq.com' },
+    { name: 'p_uin', value: 'o1000000001', domain: '.qq.com' },
     { name: 'p_skey', value: 'secret-key', domain: '.qzone.qq.com' },
-  ], '')
+  ], '1000000001')
   assert.equal(session.ok, true)
-  assert.equal(session.uin, '')
+  assert.equal(session.uin, '1000000001')
   assert.equal(session.message.includes('secret-key'), false)
   assert.equal(session.gtk, gtk('secret-key'))
 
   const other = sessionFromCookies([
     { name: 'uin', value: 'o10000', domain: '.qq.com' },
     { name: 'p_skey', value: 'secret-key', domain: '.qzone.qq.com' },
-  ], '')
+  ], '1000000001')
   assert.equal(other.ok, false)
   assert.equal(other.cookieHeader, undefined)
 })
@@ -48,11 +48,11 @@ test('qzone body parser accepts jsonp and rejects the login page', () => {
 
 test('publish body stays on the configured space and does not sync weibo', () => {
   const body = new URLSearchParams(buildPublishBody({
-    uin: '',
+    uin: '1000000001',
     content: '你好',
     visibility: 'friends',
   }))
-  assert.equal(body.get('hostuin'), '')
+  assert.equal(body.get('hostuin'), '1000000001')
   assert.equal(body.get('con'), '你好')
   assert.equal(body.get('ugc_right'), '4')
   assert.equal(body.get('issyncweibo'), '0')
@@ -82,15 +82,15 @@ test('daily publish slot blocks the immediate second post', async () => {
 })
 
 test('redact removes session material', () => {
-  const text = redact('fail p_skey=abc; skey=def; uin=o')
+  const text = redact('fail p_skey=abc; skey=def; uin=o1000000001')
   assert.equal(text.includes('abc'), false)
   assert.equal(text.includes('def'), false)
-  assert.equal(text.includes(''), false)
+  assert.equal(text.includes('1000000001'), false)
 })
 
 test('plugin registers three tools for the configured QQ', () => {
   assert.equal(name, 'qzone')
-  assert.deepEqual(inject, ['tools', 'systemPrompt'])
+  assert.deepEqual(inject, ['tools', 'systemPrompt', 'webServer'])
   const registered = []
   let prompt = ''
   apply({
@@ -106,8 +106,8 @@ test('plugin registers three tools for the configured QQ', () => {
         return () => {}
       },
     },
-  }, { uin: '' })
+  }, { uin: '1000000001' })
   assert.deepEqual(registered.map((tool) => tool.name), ['qzone_status', 'qzone_recent', 'qzone_publish'])
-  assert.match(prompt, //)
+  assert.match(prompt, /1000000001/)
   assert.equal(pluginOptions({}).uin, '')
 })

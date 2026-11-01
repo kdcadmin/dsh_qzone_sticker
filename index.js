@@ -70,7 +70,7 @@ export function apply(ctx, config = {}) {
     order: 3200,
     interpolate: false,
     text: [
-      `QQ空间插件只服务于 QQ ${options.uin} 的空间。`,
+      options.uin ? `QQ空间插件只服务于 QQ ${options.uin} 的空间。` : 'QQ空间插件只服务于当前扫码登录的那个 QQ 空间。',
       '只有用户明确要求发表，或某条定时任务的指令要求发表时，才调用 qzone_publish。',
       '发表前先调用 qzone_recent，避免和最近内容重复。一次任务只发表一条。',
       '定时发表使用 Harness 已有的 schedule_create，不要自己循环调用。',

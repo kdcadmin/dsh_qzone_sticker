@@ -2,6 +2,7 @@
     - id: qzone
       name: dsh-qzone
       config:
+        # uin 留空 = 用扫码登录的那个 QQ；不要在这里写具体 QQ 号（会进发布包）
         uin: ""
         lockUin: false
         dailyLimit: 0
